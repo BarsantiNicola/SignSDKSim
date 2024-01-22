@@ -1,0 +1,479 @@
+openapi: 3.0.0
+servers: []
+info:
+  description: API of the SignSDK simulator
+  version: "1.0.0"
+  title: SignSDK simulator
+  license:
+    name: Apache 2.0
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: info
+    description: Api for information and data retrieval
+  - name: crypto
+    description: Api for signature and pin management
+paths:
+  /init:
+    get:
+      tags:
+        - info
+      summary: Initialize a SignSDK session providing a sessionId to be used in the requests to be authorized
+      operationId: initSession
+      description: |
+        It initialize a session with a duration of 30 minutes, the sessionId must be included in all the requests to the sdk
+      parameters:
+        - in: header
+          name: Authorization
+          description: Authentication Token that must be required in order to be able to interact with the SDK
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Sign-Origin
+          required: true
+          description: Origin of the request(hostname) , the session is linked to the origin, if the user change its location a new session must be created
+          schema:
+            type: string
+      responses:
+        '200':
+          description: returns a sessionId and its duration and a set of information about the SDK
+          headers:
+            X-Sign-SDK-Session-ID:
+              schema:
+                type: string
+              description: SessionId to be used in the session calls. It has a duration of 30 minutes
+              example: a23f8a37-8de6-4593-9241-0f016244d739
+            X-Sign-SDK-Session-Duration:
+              schema:
+                type: integer
+              description: Duration in seconds of the session
+              example: 3600
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnAuthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /devices:
+    get:
+      tags:
+        - info
+      summary: returns all the available devices
+      operationId: retrieveDevices
+      description: Retrieves all the available devices compatible with the SDK and connected to the host
+      parameters:
+        - in: header
+          name: X-Sign-SDK-Session-ID
+          description: Auth token retrieved from the session initialization
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Sign-Origin
+          required: true
+          description: Origin of the request(hostname) , the session is linked to the origin, if the user change its location a new session must be created
+          schema:
+            type: string
+      responses:
+        '200':
+          description: the lists of supported devices and their available certificates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LocalSignDeviceDTO'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnAuthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /devices/{deviceSerial}/certificates/{certificateID}/content:
+    get:
+      tags:
+        - info
+      summary: retrieve information for a certificate
+      operationId: retrieveCertificate
+      description: retrieve non-confidential information of a given certificate
+      parameters:
+        - in: header
+          name: X-Sign-SDK-Session-ID
+          description: Auth token retrieved from the session initialization
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Sign-Origin
+          description: Origin of the request(hostname) , the session is linked to the origin, if the user change its location a new session must be created
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: deviceSerial
+          description: Device id, it corresponds to its serial number
+          example: b4see26-00001016
+          schema:
+            type: string
+        - in: path
+          name: certificateID
+          description: Certificate id, it corresponds to the device slot in which it is placed
+          example: 0
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: returns the content of a certificate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalSignCertificateDTO'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnAuthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+
+  /devices/{deviceSerial}/certificates/{certificateID}/validate:
+    post:
+      tags:
+        - crypto
+      summary: checks a pin for a certificate
+      operationId: validateCertificate
+      description: checks if a given pin is valid for a given certificate. In can be used also to reset the pin retries by placing the PUN code into the pin field
+      parameters:
+        - in: header
+          name: X-Sign-SDK-Session-ID
+          description: Auth token retrieved from the session initialization
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Sign-Origin
+          required: true
+          description: Origin of the request(hostname) , the session is linked to the origin, if the user change its location a new session must be created
+          schema:
+            type: string
+        - in: path
+          name: deviceSerial
+          description: Device id, it corresponds to its serial number
+          example: b4see26-00001016
+          schema:
+            type: string
+        - in: path
+          name: certificateID
+          description: Certificate id, it corresponds to the device slot in which it is placed
+          example: 0
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PinDTO'
+      responses:
+        '200':
+          description: returns the status of the activation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalSignValidatePinResponseDTO'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnAuthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /devices/{deviceSerial}/certificates/{certificateID}/sign:
+    post:
+      tags:
+        - crypto
+      summary: returns a certificate
+      operationId: signHashes
+      description: generates a signature for a list of hashed, each hash will be signed independently
+      parameters:
+        - in: header
+          name: X-Sign-SDK-Session-ID
+          description: Auth token retrieved from the session initialization
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Sign-Origin
+          required: true
+          description: Origin of the request(hostname) , the session is linked to the origin, if the user change its location a new session must be created
+          schema:
+            type: string
+        - in: path
+          name: deviceSerial
+          description: Device id, it corresponds to its serial number
+          example: b4see26-00001016
+          schema:
+            type: string
+        - in: path
+          name: certificateID
+          description: Certificate id, it corresponds to the device slot in which it is placed
+          example: 0
+          schema:
+            type: integer
+        - in: query
+          name: pin
+          description: Certificate PIN, it is required to be valid and the certificate not locked
+          example: 1234
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocalSignExecuteSignHashRequest'
+      responses:
+        '200':
+          description: returns a map containing as keys the given hashes and as values their signatures
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalSignExecuteSignHashResponseDTO'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/UnAuthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  responses:
+    UnAuthorized:
+      description: User is not authorized to make the request, can be due to an invalid AuthToken, SessionToken or PIN
+    BadRequest:
+      description: Some provided inputs are not valid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalServerError:
+      description: An unexpected error happened into the system
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    LocalSignValidatePinResponseDTO:
+      type: object
+      required:
+        - valid
+        - isPinFinalTry
+        - isPinLocked
+      properties:
+        valid:
+          type: boolean
+          description: define if the PIN/PUN was correct
+          example: true
+        isPinFinalTry:
+          type: boolean
+          description: indicates if only one trial remains before certificate will be locked
+          example: false
+        isPinLocked:
+          type: boolean
+          description: indicates if the certificate is locked. It required the PUN to be inserted into the /validate interface
+          example: true
+    LocalSignExecuteSignHashResponseDTO:
+      type: object
+      description: a map of <string,string> containing as key the provided hash and as key its signature
+      example: "{'hash':'signature'}"
+      additionalProperties:
+        type: string
+    LocalSignExecuteSignHashRequest:
+      description: a list of hashes to be signed
+      type: object
+      required:
+        - hashesToSign
+      properties:
+        hashesToSign:
+          type: array
+          items:
+            type: string
+          description: a list of hashes to be signed
+
+    PinDTO:
+      description: object to provide a PIN/PUN to the /validate interface
+      type: object
+      required:
+        - pin
+      properties:
+        pin:
+          type: string
+          description: PIN/PUN to use a certificate. If a valid PUN is inserted the PIN usage is reset
+    InitData:
+      description: Response of the /init interface providing a set of information about the SDK
+      type: object
+      required:
+        - port
+        - appVersion
+        - lastUpdate
+      properties:
+        port:
+          type: integer
+          example: 443
+          description: port in which the SDK Api is placed
+        appVersion:
+          type: string
+          example: 1.0.0
+          description: version of the SDK
+        lastUpdate:
+          type: string
+          example: 24/12/2023 16:40:32
+          description: last update to the SDK
+    LocalSignDeviceDTO:
+      required:
+        - firmwareManufacturer
+        - description
+        - model
+        - serial
+        - certificates
+      properties:
+        firmwareManufacturer:
+          type: string
+          description: producer of the sign device
+          example: bit4id srl
+        description:
+          type: string
+          description: commercial name of the device
+          example: bit4id signer
+        model:
+          type: string
+          description: model of the device
+          example: WH-1000XM4
+        serial:
+          type: string
+          description: serial number of the device
+          example: b4see26-00001016
+        certificates:
+          type: array
+          description: list of the available certificates on the device
+          items:
+            $ref: '#/components/schemas/LocalSignCertificateDTO'
+    LocalSignCertificateDTO:
+      required:
+        - slot
+        - serialNumber
+        - type
+        - startDate
+        - endDate
+        - subject
+        - issuer
+        - criticalKeyUsage
+        - maxPinLength
+        - minPinLength
+      properties:
+        slot:
+          type: integer
+          description: defines the device'slot in which the certificates is placed
+          example: 1
+        serialNumber:
+          type: string
+          description: serial number of the sign certificate
+          example: 0
+        type:
+          type: string
+          description: certificate type
+          example:
+        startDate:
+          type: string
+          description: ISOdate in which the certificate started to be valid
+          example: SMPH00123
+        endDate:
+          type: string
+          description: ISOdate in which the certificate ends to be valid
+          example: false
+        subject:
+          $ref: '#/components/schemas/LocalSignSubjectDTO'
+        issuer:
+          $ref: '#/components/schemas/LocalSignIssuerDTO'
+        criticalKeyUsage:
+          type: string
+          description: type of the certificate. Only certificate with a usage non-repudiation can be used for signing
+          example: non-repudiation
+        maxPinLength:
+          type: integer
+          description: maximum PIN length
+          example: 8
+        minPinLength:
+          type: integer
+          description: minimum PIN length
+          example: 4
+    LocalSignSubjectDTO:
+      required:
+        - commonName
+        - identifier
+        - firstName
+        - lastName
+        - country
+      properties:
+        commonName:
+          type: string
+          description: certificate owner
+          example: Donald Duck
+        identifier:
+          type: string
+          description: TAX identification number(unique identificator of the ownser)
+          example: TINIT-BRSBRB53D256A721D
+        firstName:
+          type: string
+          description: first name of the certificate owner
+          example: donald
+        lastName:
+          type: string
+          description: last name of the certificate owner
+          example: duck
+        country:
+          type: string
+          description: ISO 3166-1 alpha-2 identificator to identity the certificate ownser country
+          example: IT
+    LocalSignIssuerDTO:
+      required:
+        - country
+        - issuerName
+      properties:
+        country:
+          type: string
+          description: ISO 3166-1 alpha-2 identificator to identity the CA's country
+          example: US
+        issuerName:
+          type: string
+          description: ISOdate in which the certificate started to be valid
+          example: CA name released the certificate
+    ErrorResponse:
+      type: object
+      required:
+        - timestamp
+        - uri
+        - errorCode
+        - errorMessage
+      properties:
+        timestamp:
+          type: integer
+          format: int64
+          description: timestamp in Unix format indicating when the error has been raised
+        uri:
+          type: string
+          description: interface in which the error has been raised
+        errorCode:
+          type: string
+          description: internal error code for better identity an error
+        errorMessage:
+          type: string
+          description: brief description of the error
+      example:
+        timestamp: 1653575117421
+        uri: /devices/asdj0912/certificates/0/validate
+        errorCode: AD_001
+        errorMessage: Invalid PIN
